@@ -1,4 +1,6 @@
+import os
 import time
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -13,17 +15,39 @@ from app.routers.cars_router import router as cars_router
 settings = get_settings()
 logger = logging.getLogger("app")
 
+_scraper_task = None
+
+
+async def _scraper_loop():
+    from worker.scraper import run_scraper
+    await asyncio.sleep(5)
+    while True:
+        try:
+            logger.info("Scraper started")
+            await run_scraper(max_pages=settings.SCRAPER_MAX_PAGES)
+            logger.info("Scraper finished, next run in %d min", settings.SCRAPER_INTERVAL_MINUTES)
+        except Exception as e:
+            logger.exception("Scraper failed: %s", e)
+        await asyncio.sleep(settings.SCRAPER_INTERVAL_MINUTES * 60)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _scraper_task
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as session:
         await ensure_admin_exists(session)
 
+    run_worker = os.environ.get("RUN_WORKER", "false").lower() in ("1", "true", "yes")
+    if run_worker:
+        _scraper_task = asyncio.create_task(_scraper_loop())
+
     yield
 
+    if _scraper_task:
+        _scraper_task.cancel()
     await engine.dispose()
 
 

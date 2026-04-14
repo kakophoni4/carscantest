@@ -21,24 +21,13 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: '["https://carscaner-frontend.onrender.com"]'
-    healthCheckPath: /api/health
-
-  - type: worker
-    name: carscaner-worker
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    dockerCommand: python -m worker.scheduler
-    plan: free
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: carscaner-db
-          property: connectionString
+      - key: RUN_WORKER
+        value: "true"
       - key: SCRAPER_MAX_PAGES
-        value: "15"
+        value: "5"
       - key: SCRAPER_INTERVAL_MINUTES
         value: "60"
+    healthCheckPath: /api/health
 
   - type: web
     name: carscaner-frontend
